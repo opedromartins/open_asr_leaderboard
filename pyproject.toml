@@ -13,3 +13,17 @@ dependencies = [
 
 [project.scripts]
 open-asr-leaderboard = "open_asr_leaderboard:main"
+
+[dependency-groups]
+nemo = [
+    "nemo_toolkit[asr]",
+    "cuda-python>=12.4",
+    "IPython",
+    "datasets>=3.0.0",
+    "evaluate",
+    "jiwer",
+    "num2words",
+    "soundfile",
+    "librosa",
+    "kaldialign",
+]
