@@ -16,6 +16,7 @@ export PATH="$HOME/.local/bin:$PATH"
 BATCH_SIZE=128
 DEVICE_ID=0
 BUCKET_REPO="opedromartins/asr-leaderboard-5080"
+DATASET_PATH="opedromartins/asr-leaderboard-datasets-ptbr"
 
 # ── Install / sync the nemo dependency group ───────────────────────────
 echo "Syncing nemo dependencies..."
@@ -42,8 +43,21 @@ MAX_EVAL_SAMPLES="${MAX_EVAL_SAMPLES:--1}"   # -1 means all samples
 
 for MODEL_ID in "${MODEL_IDs[@]}"; do
 
+    MODEL_FOLDER="${MODEL_ID//\//-}"
+    mkdir -p "./results/${MODEL_FOLDER}"
+
     for cfg in "${DATASET_CONFIGS[@]}"; do
         read -r DATASET SPLIT <<< "$cfg"
+
+        # Compute the filename that write_manifest will generate
+        DATASET_PATH_SLUG="${DATASET_PATH//\//-}"
+        MODEL_SLUG="${MODEL_ID//\//-}"
+        RESULT_FILE="./results/${MODEL_FOLDER}/MODEL_${MODEL_SLUG}_DATASET_${DATASET_PATH_SLUG}_${DATASET}_${SPLIT}.jsonl"
+
+        if [ -f "${RESULT_FILE}" ]; then
+            echo "Skipping ${MODEL_ID} / ${DATASET} / ${SPLIT} — result already exists."
+            continue
+        fi
 
         echo "=========================================="
         echo "Model: ${MODEL_ID}"
@@ -52,18 +66,17 @@ for MODEL_ID in "${MODEL_IDs[@]}"; do
 
         uv run python run_eval_ptbr.py \
             --model_id="${MODEL_ID}" \
-            --dataset_path="opedromartins/asr-leaderboard-datasets-ptbr" \
+            --dataset_path="${DATASET_PATH}" \
             --dataset="${DATASET}" \
             --split="${SPLIT}" \
             --device=${DEVICE_ID} \
             --batch_size=${BATCH_SIZE} \
             --max_eval_samples=${MAX_EVAL_SAMPLES}
-    done
 
-    # Move generated results into a model-specific folder
-    MODEL_FOLDER="${MODEL_ID//\//-}"
-    mkdir -p "./results/${MODEL_FOLDER}"
-    mv ./results/*.jsonl "./results/${MODEL_FOLDER}/" 2>/dev/null || true
+        # Move the generated file directly into the model folder
+        mv ./results/MODEL_${MODEL_SLUG}_DATASET_${DATASET_PATH_SLUG}_${DATASET}_${SPLIT}.jsonl \
+           "./results/${MODEL_FOLDER}/" 2>/dev/null || true
+    done
 
 
     # Score results locally after all subsets are done
@@ -74,6 +87,11 @@ score_results(
     '$(pwd)/results',
     model_id='${MODEL_ID}'
 )"
+
+    # Sync this model's results folder immediately after evaluation
+    echo "Syncing results for ${MODEL_ID}..."
+    uv run hf buckets sync "./results/${MODEL_FOLDER}" "hf://buckets/${BUCKET_REPO}/${MODEL_FOLDER}"
+    echo "Sync complete for ${MODEL_ID}."
 
 done
 

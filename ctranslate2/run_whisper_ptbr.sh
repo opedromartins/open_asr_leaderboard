@@ -23,6 +23,7 @@ export PATH="$HOME/.local/bin:$PATH"
 DEVICE_ID=0
 BATCH_SIZE=16
 BUCKET_REPO="opedromartins/asr-leaderboard-5080"
+DATASET_PATH="opedromartins/asr-leaderboard-datasets-ptbr"
 
 # Directory where locally converted CT2 models are stored
 CT2_CONVERT_DIR="./ct2_models"
@@ -73,8 +74,21 @@ run_eval() {
     local MODEL_ID="$1"      # used for naming results folder and scoring
     local MODEL_PATH="$2"    # passed to faster-whisper (Hub ID or local path)
 
+    local MODEL_FOLDER="${MODEL_ID//\//-}"
+    local MODEL_SLUG="${MODEL_ID//\//-}"
+    local DATASET_PATH_SLUG="${DATASET_PATH//\//-}"
+    mkdir -p "./results/${MODEL_FOLDER}"
+
     for cfg in "${DATASET_CONFIGS[@]}"; do
         read -r DATASET SPLIT <<< "$cfg"
+
+        # Compute the filename that write_manifest will generate
+        local RESULT_FILE="./results/${MODEL_FOLDER}/MODEL_${MODEL_SLUG}_DATASET_${DATASET_PATH_SLUG}_${DATASET}_${SPLIT}.jsonl"
+
+        if [ -f "${RESULT_FILE}" ]; then
+            echo "Skipping ${MODEL_ID} / ${DATASET} / ${SPLIT} — result already exists."
+            continue
+        fi
 
         echo "=========================================="
         echo "Model: ${MODEL_ID}"
@@ -84,20 +98,19 @@ run_eval() {
         uv run python run_eval_ptbr.py \
             --model_id="${MODEL_PATH}" \
             --model_name="${MODEL_ID}" \
-            --dataset_path="opedromartins/asr-leaderboard-datasets-ptbr" \
+            --dataset_path="${DATASET_PATH}" \
             --dataset="${DATASET}" \
             --split="${SPLIT}" \
             --device=${DEVICE_ID} \
             --batch_size=${BATCH_SIZE} \
             --max_eval_samples=${MAX_EVAL_SAMPLES}
+
+        # Move the generated file directly into the model folder
+        mv "./results/MODEL_${MODEL_SLUG}_DATASET_${DATASET_PATH_SLUG}_${DATASET}_${SPLIT}.jsonl" \
+           "./results/${MODEL_FOLDER}/" 2>/dev/null || true
     done
 
-    # Move results into a model-specific folder
-    MODEL_FOLDER="${MODEL_ID//\//-}"
-    mkdir -p "./results/${MODEL_FOLDER}"
-    mv ./results/*.jsonl "./results/${MODEL_FOLDER}/" 2>/dev/null || true
-
-# Local score summary
+    # Local score summary
     uv run python -c "
 import sys; sys.path.insert(0, '..')
 from normalizer.eval_utils import score_results
@@ -105,6 +118,11 @@ score_results(
     '$(pwd)/results',
     model_id='${MODEL_ID}'
 )"
+
+    # Sync this model's results folder immediately after evaluation
+    echo "Syncing results for ${MODEL_ID}..."
+    uv run hf buckets sync "./results/${MODEL_FOLDER}" "hf://buckets/${BUCKET_REPO}/${MODEL_FOLDER}"
+    echo "Sync complete for ${MODEL_ID}."
 }
 
 # ── Evaluate models already in CT2 format ────────────────────────────────────
