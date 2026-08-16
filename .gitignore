@@ -142,3 +142,4 @@ results_bucket/*
 *.png
 
 *.lock
+ct2_models/
