@@ -140,3 +140,5 @@ results_bucket/*
 # results
 *.jsonl
 *.png
+
+*.lock
