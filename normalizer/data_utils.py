@@ -57,6 +57,18 @@ def get_text(sample):
             ".join{sample.keys()}. Ensure a text column name is present in the dataset."
         )
 
+
+def get_text_ptbr(sample):
+    """Read the clean reference text from PT-BR leaderboard datasets.
+
+    The dataset opedromartins/asr-leaderboard-datasets-ptbr exposes a
+    ``clean_transcription`` column that should be used as the gold reference.
+    Falls back to the generic ``get_text`` if the column is absent.
+    """
+    if "clean_transcription" in sample:
+        return sample["clean_transcription"]
+    return get_text(sample)
+
 normalizer = EnglishTextNormalizer()
 
 ml_normalizer = MultilingualNormalizer(remove_diacritics=False)
@@ -65,6 +77,17 @@ ml_normalizer = MultilingualNormalizer(remove_diacritics=False)
 def normalize(batch):
     batch["original_text"] = get_text(batch)
     batch["norm_text"] = normalizer(batch["original_text"])
+    return batch
+
+
+def normalize_ptbr(batch):
+    """Normalize a batch using the PT-BR multilingual normalizer.
+
+    Uses ``clean_transcription`` as the gold reference and applies the
+    BasicMultilingualTextNormalizer with Portuguese number expansion.
+    """
+    batch["original_text"] = get_text_ptbr(batch)
+    batch["norm_text"] = ml_normalizer(batch["original_text"], lang="pt")
     return batch
 
 
@@ -79,6 +102,16 @@ def load_data(args):
 
     return dataset
 
+
+def load_data_ptbr(args):
+    """Load a PT-BR leaderboard dataset subset.
+
+    Identical to :func:`load_data` but documents the intent to load from
+    ``opedromartins/asr-leaderboard-datasets-ptbr``.
+    """
+    return load_data(args)
+
+
 def prepare_data(dataset, sampling_rate=16000):
     # Re-sample and normalize transcriptions
     dataset = dataset.cast_column("audio", Audio(sampling_rate=sampling_rate))
@@ -91,10 +124,24 @@ def prepare_data(dataset, sampling_rate=16000):
     return dataset
 
 
+def prepare_data_ptbr(dataset, sampling_rate=16000):
+    """Re-sample audio and apply PT-BR normalization.
+
+    Like :func:`prepare_data` but uses :func:`normalize_ptbr` so that
+    ``clean_transcription`` is used as the reference and normalization is
+    done with the Portuguese multilingual normalizer.
+    """
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=sampling_rate))
+    map_kwargs = {} if isinstance(dataset, IterableDataset) else {"load_from_cache_file": False}
+    dataset = dataset.map(normalize_ptbr, **map_kwargs)
+    dataset = dataset.filter(is_target_text_in_range, input_columns=["norm_text"])
+    return dataset
+
+
 AUDIO_FILEPATH_METADATA_KEYS = [
-    "id",           # Main: https://huggingface.co/datasets/hf-audio/open-asr-leaderboard
-    "file_name",    # Multilingual: https://huggingface.co/datasets/hf-audio/open-asr-leaderboard-multilingual-datasets
-    "file_name",    # Private
+    "audio_filename",  # PT-BR: https://huggingface.co/datasets/opedromartins/asr-leaderboard-datasets-ptbr
+    "id",              # Main: https://huggingface.co/datasets/hf-audio/open-asr-leaderboard
+    "file_name",       # Multilingual: https://huggingface.co/datasets/hf-audio/open-asr-leaderboard-multilingual-datasets
 ]
 
 

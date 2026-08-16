@@ -254,6 +254,19 @@ def score_results(directory: str, model_id: str = None, multilingual: bool = Fal
                 "voxpopuli_test":         ("Voxpopuli WER",  None),
             },
         ),
+        (
+            "ptbr",
+            "asr-leaderboard-datasets-ptbr",  # substring present in all PT-BR result file paths
+            "model,RTFx,coraa-mupe WER,coraa-nurc-sp WER,coraa-v1.1 WER,fleurs WER,mls WER,tedx WER,Avg WER",
+            {
+                "asr-leaderboard-datasets-ptbr_coraa-mupe_test":    ("coraa-mupe WER",    None),
+                "asr-leaderboard-datasets-ptbr_coraa-nurc-sp_test": ("coraa-nurc-sp WER", None),
+                "asr-leaderboard-datasets-ptbr_coraa-v1.1_test":    ("coraa-v1.1 WER",    None),
+                "asr-leaderboard-datasets-ptbr_fleurs_test":        ("fleurs WER",        None),
+                "asr-leaderboard-datasets-ptbr_mls_test":           ("mls WER",           None),
+                "asr-leaderboard-datasets-ptbr_tedx_test":          ("tedx WER",          None),
+            },
+        ),
     ]
 
     # Multilingual families: one per language, covering whichever of
