@@ -72,10 +72,7 @@ import sys; sys.path.insert(0, '..')
 from normalizer.eval_utils import score_results
 score_results(
     '$(pwd)/results',
-    model_id='${MODEL_ID}',
-    multilingual=True,
-    language='pt',
-    families=['ptbr'],
+    model_id='${MODEL_ID}'
 )"
 
 done
