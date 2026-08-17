@@ -64,6 +64,7 @@ def main(args) -> None:
         "transcription_time_s": [],
         "predictions": [],
         "references": [],
+        "audio_filepaths": [],
     }
 
     for sample in tqdm(samples, desc="Transcribing"):
@@ -79,6 +80,7 @@ def main(args) -> None:
         all_results["transcription_time_s"].append(elapsed)
         all_results["predictions"].append(prediction)
         all_results["references"].append(sample["original_text"])
+        all_results["audio_filepaths"].append(data_utils.extract_audio_filepath_from_sample(sample))
 
     # ── Write manifest ───────────────────────────────────────────────────────
     manifest_model_name = args.model_name if args.model_name else args.model_id
@@ -91,6 +93,7 @@ def main(args) -> None:
         args.split,
         audio_length=all_results["audio_length_s"],
         transcription_time=all_results["transcription_time_s"],
+        audio_filepaths=all_results["audio_filepaths"],
     )
     print("Results saved at path:", os.path.abspath(manifest_path))
 
