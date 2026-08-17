@@ -127,8 +127,20 @@ def write_manifest(
     )
 
     with open(manifest_path, "w", encoding="utf-8") as f:
-        for idx, (text, transcript, audio_length, transcription_time, audio_filepath) in enumerate(
-            zip(references, transcriptions, audio_length, transcription_time, audio_filepaths)
+        for idx, (
+            text,
+            transcript,
+            audio_length,
+            transcription_time,
+            audio_filepath,
+        ) in enumerate(
+            zip(
+                references,
+                transcriptions,
+                audio_length,
+                transcription_time,
+                audio_filepaths,
+            )
         ):
             datum = {
                 "audio_filepath": audio_filepath if audio_filepath else f"sample_{idx}",
@@ -141,7 +153,9 @@ def write_manifest(
     return manifest_path
 
 
-def score_results(directory: str, model_id: str = None, csv_only: bool = False, *args, **kwargs):
+def score_results(
+    directory: str, model_id: str = None, csv_only: bool = False, *args, **kwargs
+):
     """
     Scores all result files in a directory and returns a composite score over all evaluated datasets.
 
@@ -166,10 +180,13 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
     original_model_id = model_id  # preserve original (e.g. "distil-whisper/distil-large-v3.5") for CSV label
     if model_id is not None and model_id != "":
         print("Filtering models by id:", model_id)
-        model_id = model_id.replace("/", "-")
+        model_id_dash = model_id.replace("/", "-")
+        model_id_under = model_id.replace("/", "_")
         result_files = [
-            fp for fp in result_files
-            if f"/{model_id}/" in fp or f"MODEL_{model_id}_DATASET_" in fp
+            fp
+            for fp in result_files
+            if f"/{model_id_dash}/" in fp or f"MODEL_{model_id_dash}_DATASET_" in fp
+            or f"/{model_id_under}/" in fp or f"MODEL_{model_id_under}_DATASET_" in fp
         ]
 
     # Check if any result files were found
@@ -182,7 +199,12 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
         fp = fp[model_index:]
         ds_index = fp.find("DATASET_")
         model_id = fp[:ds_index].replace("MODEL_", "").rstrip("_")
-        author_index = model_id.find("-")
+        
+        if "_" in model_id:
+            author_index = model_id.find("_")
+        else:
+            author_index = model_id.find("-")
+            
         model_id = model_id[:author_index] + "/" + model_id[author_index + 1 :]
 
         ds_fp = fp[ds_index:]
@@ -196,26 +218,39 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
             "asr-leaderboard-datasets-ptbr",  # substring present in all PT-BR result file paths
             "model,RTFx,coraa-mupe WER,coraa-nurc-sp WER,coraa-v1.1 WER,fleurs WER,mls WER,tedx WER,Avg WER",
             {
-                "asr-leaderboard-datasets-ptbr_coraa-mupe_test":    ("coraa-mupe WER",    None),
-                "asr-leaderboard-datasets-ptbr_coraa-nurc-sp_test": ("coraa-nurc-sp WER", None),
-                "asr-leaderboard-datasets-ptbr_coraa-v1.1_test":    ("coraa-v1.1 WER",    None),
-                "asr-leaderboard-datasets-ptbr_fleurs_test":        ("fleurs WER",        None),
-                "asr-leaderboard-datasets-ptbr_mls_test":           ("mls WER",           None),
-                "asr-leaderboard-datasets-ptbr_tedx_test":          ("tedx WER",          None),
+                "asr-leaderboard-datasets-ptbr_coraa-mupe_test": (
+                    "coraa-mupe WER",
+                    None,
+                ),
+                "asr-leaderboard-datasets-ptbr_coraa-nurc-sp_test": (
+                    "coraa-nurc-sp WER",
+                    None,
+                ),
+                "asr-leaderboard-datasets-ptbr_coraa-v1.1_test": (
+                    "coraa-v1.1 WER",
+                    None,
+                ),
+                "asr-leaderboard-datasets-ptbr_fleurs_test": ("fleurs WER", None),
+                "asr-leaderboard-datasets-ptbr_mls_test": ("mls WER", None),
+                "asr-leaderboard-datasets-ptbr_tedx_test": ("tedx WER", None),
             },
         ),
     ]
 
     allowed_substrs = list(FAMILY_CONFIGS[0][3].keys())
     result_files = [
-        fp for fp in result_files
+        fp
+        for fp in result_files
         if any(substr in parse_filepath(fp)[1] for substr in allowed_substrs)
     ]
     if len(result_files) == 0:
-        raise ValueError(f"No result files found in {directory} matching the PT-BR datasets.")
+        raise ValueError(
+            f"No result files found in {directory} matching the PT-BR datasets."
+        )
 
     # Compute WER results per dataset, and RTFx over all datasets
     from normalizer import data_utils  # deferred to avoid circular import
+
     results = {}
 
     for result_file in result_files:
@@ -231,14 +266,14 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
         duration = [datum["duration"] for datum in manifest]
         compute_rtfx = all(time) and all(duration)
 
-        # Align compound word boundaries before scoring, so split-vs-joined 
+        # Align compound word boundaries before scoring, so split-vs-joined
         # spelling doesn't count as an error.
         references, predictions = normalize_compound_pairs(references, predictions)
 
         # Use kaldialign batch_error_rate with merge_compounds=True so that
         # split compounds (e.g. "white paper" vs "whitepaper") count as
         # 0 errors in either direction.
-        refs_split  = [tuple(r.split()) for r in references]
+        refs_split = [tuple(r.split()) for r in references]
         preds_split = [tuple(p.split()) for p in predictions]
         r = batch_error_rate(refs_split, preds_split, merge_compounds=True)
         total_ins, total_del, total_sub = r["ins"], r["del"], r["sub"]
@@ -255,7 +290,13 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
             audio_length = inference_time = rtfx = None
 
         result_key = f"{model_id_of_file} | {dataset_id}"
-        results[result_key] = {"wer": wer, "audio_length": audio_length, "inference_time": inference_time, "rtfx": rtfx, **extra}
+        results[result_key] = {
+            "wer": wer,
+            "audio_length": audio_length,
+            "inference_time": inference_time,
+            "rtfx": rtfx,
+            **extra,
+        }
 
     if not csv_only:
         print("*" * 80)
@@ -327,46 +368,84 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
                 wer_vals = [v for v in wer_vals if v is not None]
                 if wer_vals:
                     avg = round(sum(wer_vals) / len(wer_vals), 2)
-                    label = original_model_id if original_model_id is not None else model_key.strip()
+                    label = (
+                        original_model_id
+                        if original_model_id is not None
+                        else model_key.strip()
+                    )
                     print(f"avg WER ({label}) = {avg}")
 
         print(header)
 
         for model_key in composite_wer:
-            csv_model_label = original_model_id if original_model_id is not None else model_key
-            wer_vals = {col: find_wer_in(model_key, col, col_map) for col in csv_columns}
-            wer_cols = [str(wer_vals[col]) if wer_vals[col] is not None else "" for col in csv_columns]
+            csv_model_label = (
+                original_model_id if original_model_id is not None else model_key
+            )
+            wer_vals = {
+                col: find_wer_in(model_key, col, col_map) for col in csv_columns
+            }
+            wer_cols = [
+                str(wer_vals[col]) if wer_vals[col] is not None else ""
+                for col in csv_columns
+            ]
 
             is_private = any(grp is not None for _lbl, grp in col_map.values())
             if is_private:
-                scripted_wers       = [v for _ds, (lbl, grp) in col_map.items()
-                                        if grp == "scripted"       and (v := wer_vals.get(lbl)) is not None]
-                conversational_wers = [v for _ds, (lbl, grp) in col_map.items()
-                                        if grp == "conversational" and (v := wer_vals.get(lbl)) is not None]
-                all_wers            = [v for v in wer_vals.values() if v is not None]
-                avg_overall        = round(sum(all_wers) / len(all_wers), 2)            if all_wers else ""
-                avg_scripted       = round(sum(scripted_wers) / len(scripted_wers), 2)  if scripted_wers else ""
-                avg_conv           = round(sum(conversational_wers) / len(conversational_wers), 2) if conversational_wers else ""
-                print(f"{csv_model_label},{avg_overall},{avg_scripted},{avg_conv}," + ",".join(wer_cols))
+                scripted_wers = [
+                    v
+                    for _ds, (lbl, grp) in col_map.items()
+                    if grp == "scripted" and (v := wer_vals.get(lbl)) is not None
+                ]
+                conversational_wers = [
+                    v
+                    for _ds, (lbl, grp) in col_map.items()
+                    if grp == "conversational" and (v := wer_vals.get(lbl)) is not None
+                ]
+                all_wers = [v for v in wer_vals.values() if v is not None]
+                avg_overall = (
+                    round(sum(all_wers) / len(all_wers), 2) if all_wers else ""
+                )
+                avg_scripted = (
+                    round(sum(scripted_wers) / len(scripted_wers), 2)
+                    if scripted_wers
+                    else ""
+                )
+                avg_conv = (
+                    round(sum(conversational_wers) / len(conversational_wers), 2)
+                    if conversational_wers
+                    else ""
+                )
+                print(
+                    f"{csv_model_label},{avg_overall},{avg_scripted},{avg_conv},"
+                    + ",".join(wer_cols)
+                )
             else:
                 # PTBR always gets RTFx
                 family_audio = sum(
                     results[rk]["audio_length"]
                     for ds_substr in col_map
                     for rk in results
-                    if rk.split(" | ")[0].strip() == model_key.strip() and ds_substr in rk and results[rk]["audio_length"] is not None
+                    if rk.split(" | ")[0].strip() == model_key.strip()
+                    and ds_substr in rk
+                    and results[rk]["audio_length"] is not None
                 )
                 family_time = sum(
                     results[rk]["inference_time"]
                     for ds_substr in col_map
                     for rk in results
-                    if rk.split(" | ")[0].strip() == model_key.strip() and ds_substr in rk and results[rk]["inference_time"] is not None
+                    if rk.split(" | ")[0].strip() == model_key.strip()
+                    and ds_substr in rk
+                    and results[rk]["inference_time"] is not None
                 )
                 rtfx_val = round(family_audio / family_time, 2) if family_time else ""
-                
+
                 valid_wers = [float(w) for w in wer_cols if w != ""]
-                avg_wer = str(round(sum(valid_wers) / len(valid_wers), 2)) if valid_wers else ""
-                
+                avg_wer = (
+                    str(round(sum(valid_wers) / len(valid_wers), 2))
+                    if valid_wers
+                    else ""
+                )
+
                 print(",".join([csv_model_label, str(rtfx_val)] + wer_cols + [avg_wer]))
 
         print("*" * 80)

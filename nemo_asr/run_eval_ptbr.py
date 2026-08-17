@@ -189,11 +189,11 @@ def main(args):
 
     avg_time = total_time / len(all_data["audio_filepaths"])
 
-    # Write manifest results
+    manifest_model_name = args.model_name if args.model_name else args.model_id
     manifest_path = data_utils.write_manifest(
         all_data["references"],
         predictions,
-        args.model_id,
+        manifest_model_name,
         args.dataset_path,
         args.dataset,
         args.split,
@@ -229,6 +229,12 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Model identifier. Should be loadable with NVIDIA NeMo.",
+    )
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default=None,
+        help="Model name for output files. Defaults to model_id.",
     )
     parser.add_argument(
         "--dataset_path",

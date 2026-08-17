@@ -74,8 +74,8 @@ run_eval() {
     local MODEL_ID="$1"      # used for naming results folder and scoring
     local MODEL_PATH="$2"    # passed to faster-whisper (Hub ID or local path)
 
-    local MODEL_FOLDER="${MODEL_ID//\//-}"
-    local MODEL_SLUG="${MODEL_ID//\//-}"
+    local MODEL_FOLDER="${MODEL_ID//\//_}"
+    local MODEL_SLUG="${MODEL_ID//\//_}"
     local DATASET_PATH_SLUG="${DATASET_PATH//\//-}"
     mkdir -p "./results/${MODEL_FOLDER}"
 
@@ -97,7 +97,7 @@ run_eval() {
 
         uv run python run_eval_ptbr.py \
             --model_id="${MODEL_PATH}" \
-            --model_name="${MODEL_ID}" \
+            --model_name="${MODEL_SLUG}" \
             --dataset_path="${DATASET_PATH}" \
             --dataset="${DATASET}" \
             --split="${SPLIT}" \

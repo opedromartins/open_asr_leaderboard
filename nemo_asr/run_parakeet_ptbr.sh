@@ -43,7 +43,7 @@ MAX_EVAL_SAMPLES="${MAX_EVAL_SAMPLES:--1}"   # -1 means all samples
 
 for MODEL_ID in "${MODEL_IDs[@]}"; do
 
-    MODEL_FOLDER="${MODEL_ID//\//-}"
+    MODEL_FOLDER="${MODEL_ID//\//_}"
     mkdir -p "./results/${MODEL_FOLDER}"
 
     for cfg in "${DATASET_CONFIGS[@]}"; do
@@ -51,7 +51,7 @@ for MODEL_ID in "${MODEL_IDs[@]}"; do
 
         # Compute the filename that write_manifest will generate
         DATASET_PATH_SLUG="${DATASET_PATH//\//-}"
-        MODEL_SLUG="${MODEL_ID//\//-}"
+        MODEL_SLUG="${MODEL_ID//\//_}"
         RESULT_FILE="./results/${MODEL_FOLDER}/MODEL_${MODEL_SLUG}_DATASET_${DATASET_PATH_SLUG}_${DATASET}_${SPLIT}.jsonl"
 
         if [ -f "${RESULT_FILE}" ]; then
@@ -66,6 +66,7 @@ for MODEL_ID in "${MODEL_IDs[@]}"; do
 
         uv run python run_eval_ptbr.py \
             --model_id="${MODEL_ID}" \
+            --model_name="${MODEL_SLUG}" \
             --dataset_path="${DATASET_PATH}" \
             --dataset="${DATASET}" \
             --split="${SPLIT}" \
