@@ -141,10 +141,18 @@ for HF_ID in "${HF_MODEL_IDs[@]}"; do
         echo "=========================================="
         echo "Converting ${HF_ID} -> ${LOCAL_PATH}"
         echo "=========================================="
+        
+        HAS_TOKENIZER=$(uv run python -c "from huggingface_hub import file_exists; print(file_exists('${HF_ID}', 'tokenizer.json'))" 2>/dev/null || echo "False")
+        
+        COPY_FILES="preprocessor_config.json"
+        if [ "$HAS_TOKENIZER" = "True" ]; then
+            COPY_FILES="preprocessor_config.json tokenizer.json"
+        fi
+
         uv run ct2-transformers-converter \
             --model "${HF_ID}" \
             --output_dir "${LOCAL_PATH}" \
-            --copy_files preprocessor_config.json \
+            --copy_files $COPY_FILES \
             --quantization float16
     else
         echo "Skipping conversion — ${LOCAL_PATH} already exists."
