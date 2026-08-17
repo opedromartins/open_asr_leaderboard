@@ -5,10 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
+    "datasets>=3.0.0",
+    "evaluate",
+    "huggingface-hub[hf-transfer]",
+    "jiwer",
+    "kaldialign",
+    "librosa",
+    "num2words",
+    "regex",
     "torch",
     "torchcodec",
-    "tqdm",
-    "huggingface-hub[hf-transfer]"
+    "tqdm"
 ]
 
 [project.scripts]
@@ -16,27 +23,19 @@ open-asr-leaderboard = "open_asr_leaderboard:main"
 
 [dependency-groups]
 nemo = [
-    "nemo_toolkit[asr]",
     "cuda-python>=12.4",
     "IPython",
-    "datasets>=3.0.0",
-    "evaluate",
-    "jiwer",
-    "num2words",
-    "soundfile",
-    "librosa",
-    "kaldialign",
+    "nemo_toolkit[asr]",
+    "soundfile"
 ]
 
 ctranslate2 = [
     "ctranslate2",
     "faster-whisper>=0.8.0",
-    "datasets>=3.0.0",
-    "evaluate",
-    "jiwer",
-    "librosa",
-    "num2words",
-    "kaldialign",
     "transformers",
-    "regex",
+]
+
+transformers = [
+    "accelerate",
+    "transformers>=4.45.0",
 ]
