@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download all results from an HF bucket and print a CSV summary.
+"""Download all results from an HF bucket, score them, and save a results.csv.
 
 Usage:
     python scripts/score_bucket_results.py
@@ -9,9 +9,13 @@ Usage:
 """
 
 import argparse
+import contextlib
+import io
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 # Allow importing normalizer from the repo root regardless of where the script
 # is called from.
@@ -27,7 +31,7 @@ PTBR_BUCKET = "opedromartins/asr-leaderboard-5080"
 def sync_bucket(bucket: str, local_dir: str, hf_token: str | None = None) -> None:
     """Sync an HF bucket to a local directory using the `hf` CLI."""
     bucket_url = f"hf://buckets/{bucket}"
-    print(f"Syncing {bucket_url}  \u2192  {local_dir} ...")
+    print(f"Syncing {bucket_url}  →  {local_dir} ...")
     os.makedirs(local_dir, exist_ok=True)
     env = os.environ.copy()
     if hf_token:
@@ -40,8 +44,30 @@ def sync_bucket(bucket: str, local_dir: str, hf_token: str | None = None) -> Non
     print("Sync complete.\n")
 
 
+def upload_csv_to_bucket(
+    csv_path: str, bucket: str, hf_token: str | None = None
+) -> None:
+    """Upload results.csv to the root of the HF bucket."""
+    bucket_url = f"hf://buckets/{bucket}"
+    print(f"Uploading {csv_path}  →  {bucket_url}/results.csv ...")
+    env = os.environ.copy()
+    if hf_token:
+        env["HF_TOKEN"] = hf_token
+    # hf buckets sync only works with directories, so stage the file in a tmpdir
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shutil.copy2(csv_path, os.path.join(tmpdir, "results.csv"))
+        subprocess.run(
+            ["hf", "buckets", "sync", tmpdir, bucket_url],
+            check=True,
+            env=env,
+        )
+    print("Upload complete.\n")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Score all results from an HF bucket.")
+    parser = argparse.ArgumentParser(
+        description="Score all results from an HF bucket and save results.csv."
+    )
     parser.add_argument(
         "--bucket",
         default=None,
@@ -54,9 +80,14 @@ def main():
         help="Local directory to sync results into. Defaults to <repo_root>/results.",
     )
     parser.add_argument(
-        "--skip_sync",
+        "--skip_download",
         action="store_true",
-        help="Skip the bucket sync and score the already-downloaded results in --local_dir.",
+        help="Skip syncing the bucket and score already-downloaded results in --local_dir.",
+    )
+    parser.add_argument(
+        "--skip_upload",
+        action="store_true",
+        help="Skip uploading results.csv to the bucket after scoring.",
     )
     parser.add_argument(
         "--hf_token",
@@ -77,28 +108,47 @@ def main():
     bucket = args.bucket or PTBR_BUCKET
     local_dir = args.local_dir or os.path.join(REPO_ROOT, "results")
 
-    if not args.skip_sync:
+    if not args.skip_download:
         sync_bucket(bucket, local_dir, hf_token=args.hf_token)
     else:
-        print(f"Skipping sync — scoring results in: {local_dir}\n")
+        print(f"Skipping download — scoring results in: {local_dir}\n")
 
     if not os.path.isdir(local_dir):
         print(f"ERROR: Local results directory not found: {local_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Score the requested models; csv_only=True suppresses per-dataset and
-    # composite output, printing only the CSV summary block.
     model_ids = args.model_id or [None]  # None means all models
 
-    for model_id in model_ids:
-        try:
-            score_results(
-                local_dir,
-                model_id=model_id,
-                csv_only=True,
-            )
-        except ValueError as e:
-            print(f"Skipping model_id={model_id}: {e}")
+    # Capture CSV output so we can both print it and save it to a file
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        for model_id in model_ids:
+            try:
+                score_results(
+                    local_dir,
+                    model_id=model_id,
+                    csv_only=True,
+                )
+            except ValueError as e:
+                print(f"Skipping model_id={model_id}: {e}")
+
+    csv_content = buf.getvalue()
+    sys.stdout.write(csv_content)  # still print to the terminal (with decorations)
+
+    # Keep only valid CSV lines (header + data rows all contain a comma;
+    # decorative *** borders and title lines do not)
+    csv_lines = [ln for ln in csv_content.splitlines() if "," in ln]
+    clean_csv = "\n".join(csv_lines) + "\n"
+
+    # Save to results.csv inside local_dir
+    csv_path = os.path.join(local_dir, "results.csv")
+    with open(csv_path, "w", encoding="utf-8") as f:
+        f.write(clean_csv)
+    print(f"\nCSV saved to: {csv_path}")
+
+    # Upload results.csv to the bucket
+    if not args.skip_upload:
+        upload_csv_to_bucket(csv_path, bucket, hf_token=args.hf_token)
 
 
 if __name__ == "__main__":
