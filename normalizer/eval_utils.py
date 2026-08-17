@@ -304,7 +304,8 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
         for ds_substr, (label, _group) in col_map.items():
             if label == col_label:
                 for result_key, result_val in results.items():
-                    if model_key.rstrip() in result_key and ds_substr in result_key:
+                    result_model = result_key.split(" | ")[0].strip()
+                    if result_model == model_key.strip() and ds_substr in result_key:
                         return result_val["wer"]
         return None
 
@@ -353,13 +354,13 @@ def score_results(directory: str, model_id: str = None, csv_only: bool = False, 
                     results[rk]["audio_length"]
                     for ds_substr in col_map
                     for rk in results
-                    if model_key.rstrip() in rk and ds_substr in rk and results[rk]["audio_length"] is not None
+                    if rk.split(" | ")[0].strip() == model_key.strip() and ds_substr in rk and results[rk]["audio_length"] is not None
                 )
                 family_time = sum(
                     results[rk]["inference_time"]
                     for ds_substr in col_map
                     for rk in results
-                    if model_key.rstrip() in rk and ds_substr in rk and results[rk]["inference_time"] is not None
+                    if rk.split(" | ")[0].strip() == model_key.strip() and ds_substr in rk and results[rk]["inference_time"] is not None
                 )
                 rtfx_val = round(family_audio / family_time, 2) if family_time else ""
                 

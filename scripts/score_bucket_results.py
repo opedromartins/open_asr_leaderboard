@@ -3,9 +3,10 @@
 
 Usage:
     python scripts/score_bucket_results.py
-    python scripts/score_bucket_results.py --bucket opedromartins/asr-leaderboard-5080
-    python scripts/score_bucket_results.py --bucket opedromartins/asr-leaderboard-5080 --local_dir results
-    python scripts/score_bucket_results.py --skip_sync   # re-score already-downloaded results
+    python scripts/score_bucket_results.py --bucket <bucket>
+    python scripts/score_bucket_results.py --bucket <bucket> --local_dir results
+    python scripts/score_bucket_results.py --skip_download   # re-score already-downloaded results
+    python scripts/score_bucket_results.py --skip_upload   # skip uploading results.csv to the bucket after scoring.
 """
 
 import argparse
@@ -23,9 +24,6 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 from normalizer.eval_utils import score_results
-
-# PT-BR leaderboard bucket
-PTBR_BUCKET = "opedromartins/asr-leaderboard-5080"
 
 
 def sync_bucket(bucket: str, local_dir: str, hf_token: str | None = None) -> None:
@@ -71,8 +69,7 @@ def main():
     parser.add_argument(
         "--bucket",
         default=None,
-        help="HF bucket name (without the hf://buckets/ prefix). Defaults to "
-        "opedromartins/asr-leaderboard-5080.",
+        help="HF bucket name (without the hf://buckets/ prefix).",
     )
     parser.add_argument(
         "--local_dir",
@@ -105,7 +102,7 @@ def main():
     )
     args = parser.parse_args()
 
-    bucket = args.bucket or PTBR_BUCKET
+    bucket = args.bucket
     local_dir = args.local_dir or os.path.join(REPO_ROOT, "results")
 
     if not args.skip_download:
