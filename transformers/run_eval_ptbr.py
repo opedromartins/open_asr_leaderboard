@@ -84,6 +84,8 @@ def main(args) -> None:
     else:
         sampling_rate = 16_000
 
+    is_nemotron = any(m in args.model_id.lower() for m in ("nemotron"))
+
     # Set generate arguments
     if model.can_generate():
         gen_kwargs = {}
@@ -144,7 +146,18 @@ def main(args) -> None:
             padding_audios = [audios[-1] for _ in range(padding_size)]
             audios.extend(padding_audios)
 
-        if not model.can_generate():
+        if is_nemotron:
+            max_samples = int(30 * sr)
+            audios = [a[:max_samples] for a in audios]
+            rnnt_processor_kwargs = dict(
+                sampling_rate=sr,
+                padding=True,
+                return_tensors="pt",
+            )
+            if "-en" not in args.model_id.lower():
+                rnnt_processor_kwargs["language"] = "pt"
+            inputs = processor(audios, **rnnt_processor_kwargs)
+        elif not model.can_generate():
             # CTC: normalize to mean 0, std 1
             inputs = processor(
                 audios,
@@ -177,7 +190,12 @@ def main(args) -> None:
                 SDPBackend.MATH,
             ]
         with sdpa_kernel(sdpa_backends):
-            if model.can_generate():
+            if is_nemotron:
+                rnnt_output = model.generate(
+                    **inputs, **gen_kwargs, return_dict_in_generate=True
+                )
+                pred_ids = rnnt_output.sequences
+            elif model.can_generate():
                 pred_ids = model.generate(
                     **inputs, **gen_kwargs, min_new_tokens=min_new_tokens
                 )
@@ -190,7 +208,9 @@ def main(args) -> None:
         if padding_size is not None:
             pred_ids = pred_ids[:-padding_size, ...]
 
-        if is_ctc:
+        if is_nemotron:
+            pred_text = processor.decode(pred_ids, skip_special_tokens=True)
+        elif is_ctc:
             # Don't use skip_special_tokens as it collapses double letters
             pred_text = processor.batch_decode(pred_ids)
         else:
